@@ -2,14 +2,19 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
+  Bot,
   Boxes,
   Code2,
   Contact,
   FileDown,
+  Loader2,
   Mail,
+  Send,
   ShieldCheck,
   Sparkles,
+  UserRound,
 } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import type { MetaFunction } from "react-router";
 import { Link } from "react-router";
 
@@ -48,6 +53,7 @@ export default function Home() {
       <About />
       <CareerJourney />
       <PortfolioPreview />
+      <DigitalTwinChat />
       <ContactBand />
     </main>
   );
@@ -78,6 +84,9 @@ function SiteHeader() {
           </a>
           <a className="transition hover:text-foreground" href="#portfolio">
             Portfolio
+          </a>
+          <a className="transition hover:text-foreground" href="#digital-twin">
+            Digital Twin
           </a>
         </div>
 
@@ -307,6 +316,289 @@ function PortfolioPreview() {
       </div>
     </section>
   );
+}
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
+
+const starterQuestions = [
+  "What kind of UI architecture work has Freddie led?",
+  "Summarize Freddie's career journey.",
+  "Which projects best show Freddie's data-heavy product experience?",
+] as const;
+
+function DigitalTwinChat() {
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "intro",
+      role: "assistant",
+      content:
+        "I’m Freddie’s digital twin. Ask me about his UI architecture work, EPA modernization projects, technical leadership, or career arc.",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submitQuestion(question: string) {
+    const trimmed = question.trim();
+
+    if (!trimmed || isStreaming) {
+      return;
+    }
+
+    setError(null);
+    setInput("");
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmed,
+    };
+    const assistantId = crypto.randomUUID();
+    const nextMessages = [...messages, userMessage];
+
+    setMessages([
+      ...nextMessages,
+      {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+      },
+    ]);
+    setIsStreaming(true);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: nextMessages.map(({ role, content }) => ({ role, content })),
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string; details?: string }
+          | null;
+        throw new Error(payload?.error ?? "The digital twin could not respond.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        setMessages((currentMessages) =>
+          currentMessages.map((message) =>
+            message.id === assistantId
+              ? { ...message, content: message.content + chunk }
+              : message,
+          ),
+        );
+      }
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "The digital twin could not respond.";
+
+      setError(message);
+      setMessages((currentMessages) =>
+        currentMessages.map((chatMessage) =>
+          chatMessage.id === assistantId
+            ? {
+                ...chatMessage,
+                content:
+                  "I hit a connection issue with OpenRouter. Check the server logs and API key, then try again.",
+              }
+            : chatMessage,
+        ),
+      );
+    } finally {
+      setIsStreaming(false);
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitQuestion(input);
+  }
+
+  return (
+    <section id="digital-twin" className="py-20">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:px-8">
+        <div>
+          <Badge variant="signal" className="gap-2">
+            <Bot className="size-3.5" />
+            Digital twin
+          </Badge>
+          <h2 className="mt-5 text-balance text-3xl font-bold sm:text-4xl">
+            Ask Freddie’s career graph anything.
+          </h2>
+          <p className="mt-4 text-pretty text-lg leading-8 text-muted-foreground">
+            Grounded in the resume, LinkedIn export, and portfolio signals already
+            powering this site.
+          </p>
+
+          <div className="mt-8 grid gap-3">
+            {starterQuestions.map((question) => (
+              <Button
+                key={question}
+                type="button"
+                variant="outline"
+                className="h-auto justify-between whitespace-normal py-3 text-left"
+                onClick={() => void submitQuestion(question)}
+                disabled={isStreaming}
+              >
+                <span>{question}</span>
+                <ArrowRight />
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <Card className="border-primary/20 bg-card/82 shadow-[0_0_80px_oklch(0.78_0.16_178/0.08)]">
+          <CardHeader className="border-b border-white/8">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle>Freddie Twin</CardTitle>
+                <CardDescription>
+                  OpenRouter / {profile.title}
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="font-mono">
+                {isStreaming ? "thinking" : "ready"}
+              </Badge>
+            </div>
+          </CardHeader>
+
+          <CardContent className="grid gap-4">
+            <div className="h-[28rem] overflow-y-auto pr-1">
+              <div className="grid gap-4">
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={
+                      message.role === "user"
+                        ? "ml-auto max-w-[86%]"
+                        : "mr-auto max-w-[92%]"
+                    }
+                  >
+                    <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                      {message.role === "user" ? (
+                        <UserRound className="size-3.5" />
+                      ) : (
+                        <Bot className="size-3.5 text-primary" />
+                      )}
+                      {message.role === "user" ? "You" : "Freddie Twin"}
+                    </div>
+                    <div
+                      className={
+                        message.role === "user"
+                          ? "rounded-lg border border-primary/25 bg-primary px-4 py-3 text-sm leading-6 text-primary-foreground"
+                          : "rounded-lg border border-white/10 bg-background/78 px-4 py-3 text-sm leading-6 text-card-foreground"
+                      }
+                    >
+                      {message.content ? (
+                        <FormattedMessage content={message.content} />
+                      ) : (
+                        <span className="inline-flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="size-4 animate-spin" />
+                          Thinking through the timeline
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {error ? (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-red-200">
+                {error}
+              </p>
+            ) : null}
+
+            <form className="flex gap-2" onSubmit={handleSubmit}>
+              <label className="sr-only" htmlFor="digital-twin-input">
+                Ask the digital twin
+              </label>
+              <input
+                id="digital-twin-input"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Ask about Freddie’s leadership, stack, or projects..."
+                disabled={isStreaming}
+                className="h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/45 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <Button type="submit" size="icon" disabled={isStreaming || !input.trim()}>
+                {isStreaming ? <Loader2 className="animate-spin" /> : <Send />}
+                <span className="sr-only">Send</span>
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function FormattedMessage({ content }: { content: string }) {
+  return (
+    <div className="space-y-2">
+      {content.split(/\n{2,}/).map((block, index) => {
+        const trimmed = block.trim();
+
+        if (!trimmed) {
+          return null;
+        }
+
+        if (trimmed.startsWith("- ")) {
+          return (
+            <ul key={index} className="list-disc space-y-1 pl-5">
+              {trimmed.split("\n").map((item) => (
+                <li key={item}>{renderInline(item.replace(/^-\s*/, ""))}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        return <p key={index}>{renderInline(trimmed)}</p>;
+      })}
+    </div>
+  );
+}
+
+function renderInline(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code key={index} className="rounded bg-white/10 px-1 py-0.5 font-mono text-xs">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+
+    return part;
+  });
 }
 
 function ContactBand() {
