@@ -1,0 +1,8 @@
+.env
+Microsoft.Services.Store.winmd
+node_modules/
+build/
+.react-router/
+dist/
+.vite/
+coverage/
